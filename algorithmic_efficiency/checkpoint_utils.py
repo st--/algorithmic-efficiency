@@ -238,3 +238,6 @@ def save_checkpoint(framework: str,
     torch.save(checkpoint_state, save_path)
 
   logging.info(f'Saved checkpoint to {save_path}.')
+
+  del checkpoint_state
+  return 
