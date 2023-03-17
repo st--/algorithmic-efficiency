@@ -240,4 +240,7 @@ def save_checkpoint(framework: str,
   logging.info(f'Saved checkpoint to {save_path}.')
 
   del checkpoint_state
+  del model_params
+  del opt_state
+  
   return 
