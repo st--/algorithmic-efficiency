@@ -225,7 +225,6 @@ def train_once(
     max_global_steps: int = None,
     log_dir: Optional[str] = None) -> Tuple[spec.Timing, Dict[str, Any]]:
   data_rng, opt_init_rng, model_init_rng, rng = prng.split(rng, 4)
-
   # Workload setup.
   logging.info('Initializing dataset.')
   with profiler.profile('Initializing dataset'):
@@ -300,6 +299,7 @@ def train_once(
     global_start_time = sync_ddp_time(global_start_time, DEVICE)
 
   logging.info('Starting training loop.')
+  tf.profiler.experimental.start(log_dir)
   while train_state['is_time_remaining'] and \
       not train_state['goal_reached'] and \
       not train_state['training_complete']:
@@ -400,7 +400,9 @@ def train_once(
                             f'{global_step}, error : {str(e)}.')
             if torch.cuda.is_available():
               torch.cuda.empty_cache()
-
+    if global_step == 10:
+      tf.profiler.experimental.stop()
+        
   metrics = {'eval_results': eval_results, 'global_step': global_step}
 
   if log_dir is not None:
