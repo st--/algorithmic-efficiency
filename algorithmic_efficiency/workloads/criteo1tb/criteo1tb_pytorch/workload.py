@@ -159,9 +159,8 @@ class Criteo1TbDlrmSmallWorkload(BaseCriteo1TbDlrmSmallWorkload):
             batch['targets'], dtype=torch.float32, device=DEVICE)
         if not_train:
           weights = batch.get('weights')
-          if weights is not None:
-            weights = torch.as_tensor(
-                weights, dtype=torch.float32, device=DEVICE)
+          if weights is None:
+            weights = torch.ones(per_device_batch_size, dtype=torch.float32, device=DEVICE)
 
         # Send batch to other devices when using DDP.
         if USE_PYTORCH_DDP:
@@ -170,8 +169,7 @@ class Criteo1TbDlrmSmallWorkload(BaseCriteo1TbDlrmSmallWorkload):
             per_device_batch_size = torch.tensor(
                 len(targets[0]), dtype=torch.int32, device=DEVICE)
             dist.broadcast(per_device_batch_size, src=0)
-            if weights is not None:
-              dist.broadcast(weights, src=0)
+            dist.broadcast(weights, src=0)
             weights = weights[0]
           dist.broadcast(inputs, src=0)
           inputs = inputs[0]
@@ -206,8 +204,6 @@ class Criteo1TbDlrmSmallWorkload(BaseCriteo1TbDlrmSmallWorkload):
         dist.broadcast(targets, src=0)
         targets = targets[RANK]
 
-      if weights is None:
-        weights = torch.ones(per_device_batch_size, device=DEVICE)
       batch = {
           'inputs': inputs,
           'targets': targets,
