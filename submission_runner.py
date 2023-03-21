@@ -226,7 +226,6 @@ def train_once(
     log_dir: Optional[str] = None) -> Tuple[spec.Timing, Dict[str, Any]]:
   data_rng, opt_init_rng, model_init_rng, rng = prng.split(rng, 4)
   # Workload setup.
-  file = open
   event = "Starting train once"
   logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
   logging.info(f'Initializing dataset.')
