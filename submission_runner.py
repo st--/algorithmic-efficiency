@@ -311,7 +311,6 @@ def train_once(
   event = "Before starting training loop and logger metrics bundle"
   logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
   logging.info('Starting training loop.')
-  tf.profiler.experimental.start(log_dir)
   while train_state['is_time_remaining'] and \
       not train_state['goal_reached'] and \
       not train_state['training_complete']:
@@ -422,8 +421,6 @@ def train_once(
                             f'{global_step}, error : {str(e)}.')
             if torch.cuda.is_available():
               torch.cuda.empty_cache()
-    if global_step == 10:
-      tf.profiler.experimental.stop()
         
   metrics = {'eval_results': eval_results, 'global_step': global_step}
 
