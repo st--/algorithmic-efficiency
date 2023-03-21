@@ -330,6 +330,9 @@ def train_once(
                              hyperparameters,
                              global_step,
                              data_select_rng)
+    if global_step == <=1:
+      event = f"After dataselection batch at step {global_step}"
+      logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
     try:
       with profiler.profile('Update parameters'):
         optimizer_state, model_params, model_state = update_params(
@@ -344,6 +347,9 @@ def train_once(
             eval_results=eval_results,
             global_step=global_step,
             rng=update_rng)
+      if global_step == <=1:
+        event = f"After update parameters step {global_step}"
+        logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
     except spec.TrainingCompleteError:
       train_state['training_complete'] = True
     global_step += 1
