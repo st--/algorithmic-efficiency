@@ -13,7 +13,7 @@ python3 submission_runner.py \
     --experiment_dir=/home/znado/experiment_dir \
     --experiment_name=baseline
 """
-
+import psutil
 import datetime
 import importlib
 import inspect
@@ -225,15 +225,18 @@ def train_once(
     max_global_steps: int = None,
     log_dir: Optional[str] = None) -> Tuple[spec.Timing, Dict[str, Any]]:
   data_rng, opt_init_rng, model_init_rng, rng = prng.split(rng, 4)
-
   # Workload setup.
-  logging.info('Initializing dataset.')
+  event = "Starting train once"
+  logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
+  logging.info(f'Initializing dataset.')
   with profiler.profile('Initializing dataset'):
     input_queue = workload._build_input_queue(
         data_rng,
         'train',
         data_dir=data_dir,
         global_batch_size=global_batch_size)
+  event = "After Initializing dataset"
+  logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
   logging.info('Initializing model.')
   with profiler.profile('Initializing model'):
     dropout_rate = None
@@ -244,6 +247,8 @@ def train_once(
       aux_dropout_rate = hyperparameters.aux_dropout_rate
     model_params, model_state = workload.init_model_fn(
         model_init_rng, dropout_rate, aux_dropout_rate)
+  event = "After Initializing model"
+  logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
   logging.info('Initializing optimizer.')
   with profiler.profile('Initializing optimizer'):
     optimizer_state = init_optimizer_state(workload,
@@ -251,6 +256,8 @@ def train_once(
                                            model_state,
                                            hyperparameters,
                                            opt_init_rng)
+  event = "After Initializing metrics bundle"
+  logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
   logging.info('Initializing metrics bundle.')
   # Bookkeeping.
   train_state = {
@@ -293,12 +300,15 @@ def train_once(
     logger_utils.write_json(flag_file_name, flags.FLAGS.flag_values_dict())
     metrics_logger = logger_utils.set_up_loggers(log_dir, flags.FLAGS)
     workload.attach_metrics_logger(metrics_logger)
-
+  event = "After checkpoint and logger metrics bundle"
+  logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
   global_start_time = time.time()
   if USE_PYTORCH_DDP:
     # Make sure all processes start training at the same time.
     global_start_time = sync_ddp_time(global_start_time, DEVICE)
 
+  event = "Before starting training loop and logger metrics bundle"
+  logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
   logging.info('Starting training loop.')
   while train_state['is_time_remaining'] and \
       not train_state['goal_reached'] and \
@@ -318,6 +328,9 @@ def train_once(
                              hyperparameters,
                              global_step,
                              data_select_rng)
+    if global_step <=1:
+      event = f"After dataselection batch at step {global_step}"
+      logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
     try:
       with profiler.profile('Update parameters'):
         optimizer_state, model_params, model_state = update_params(
@@ -332,6 +345,9 @@ def train_once(
             eval_results=eval_results,
             global_step=global_step,
             rng=update_rng)
+      if global_step <=1:
+        event = f"After update parameters step {global_step}"
+        logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
     except spec.TrainingCompleteError:
       train_state['training_complete'] = True
     global_step += 1
@@ -351,6 +367,8 @@ def train_once(
         workload.eval_period_time_sec or train_state['training_complete']):
       with profiler.profile('Evaluation'):
         try:
+          event = f"Before eval at step {global_step}"
+          logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
           latest_eval_result = workload.eval_model(global_eval_batch_size,
                                                    model_params,
                                                    model_state,
@@ -368,7 +386,8 @@ def train_once(
           train_state['goal_reached'] = (
               workload.has_reached_validation_target(latest_eval_result) and
               workload.has_reached_test_target(latest_eval_result))
-
+          event = f"After eval at step {global_step}"
+          logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
           if log_dir is not None:
             metrics_logger.append_scalar_metrics(
                 latest_eval_result,
@@ -386,7 +405,8 @@ def train_once(
                 checkpoint_dir=log_dir,
                 save_intermediate_checkpoints=FLAGS
                 .save_intermediate_checkpoints)
-
+          event = f"After logging and checkpointing eval at step {global_step}"
+          logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}") 
           train_state['last_eval_time'] = time.time()
           if USE_PYTORCH_DDP:
             # Make sure all processes finish evaluation at the same time.
@@ -400,7 +420,7 @@ def train_once(
                             f'{global_step}, error : {str(e)}.')
             if torch.cuda.is_available():
               torch.cuda.empty_cache()
-
+        
   metrics = {'eval_results': eval_results, 'global_step': global_step}
 
   if log_dir is not None:
