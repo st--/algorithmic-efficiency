@@ -366,7 +366,7 @@ def train_once(
         workload.max_allowed_runtime_sec)
     # Check if submission is eligible for an untimed eval.
     if ((current_time - train_state['last_eval_time']) >=
-        workload.eval_period_time_sec or train_state['training_complete']):
+        workload.eval_period_time_sec or train_state['training_complete']) or (global_step == 1):
       with profiler.profile('Evaluation'):
         try:
           event = f"Before eval at step {global_step}"
