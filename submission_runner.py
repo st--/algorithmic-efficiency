@@ -431,7 +431,7 @@ def train_once(
             if torch.cuda.is_available():
               torch.cuda.empty_cache()
     train_state['accumulated_eval_time'] += time.time() - current_time
-    model_params.block_until_ready()
+  model_params.block_until_ready()
   
   train_state['total_accumulated_time'] = time.time() - global_start_time     
   metrics = {'eval_results': eval_results, 'global_step': global_step}
