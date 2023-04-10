@@ -266,6 +266,8 @@ def train_once(
       'is_time_remaining': True,
       'last_eval_time': 0,
       'accumulated_submission_time': 0,
+      'accumulated_eval_time': 0,
+      'total_accumulated_time:': 0,
       'training_complete': False,
   }
   global_step = 0
@@ -400,19 +402,20 @@ def train_once(
                 latest_eval_result,
                 global_step=global_step,
                 preemption_count=preemption_count)
-            checkpoint_utils.save_checkpoint(
-                framework=FLAGS.framework,
-                optimizer_state=optimizer_state,
-                model_params=model_params,
-                model_state=model_state,
-                train_state=train_state,
-                eval_results=eval_results,
-                global_step=global_step,
-                preemption_count=preemption_count,
-                checkpoint_dir=log_dir,
-                save_intermediate_checkpoints=FLAGS
-                .save_intermediate_checkpoints)
-          event = f"After logging and checkpointing eval at step {global_step}"
+            # Disable checkpointing
+            # checkpoint_utils.save_checkpoint(
+            #     framework=FLAGS.framework,
+            #     optimizer_state=optimizer_state,
+            #     model_params=model_params,
+            #     model_state=model_state,
+            #     train_state=train_state,
+            #     eval_results=eval_results,
+            #     global_step=global_step,
+            #     preemption_count=preemption_count,
+            #     checkpoint_dir=log_dir,
+            #     save_intermediate_checkpoints=FLAGS
+            #     .save_intermediate_checkpoints)
+          event = f"After logging (checkpointing disabled) eval at step {global_step}"
           logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}") 
           train_state['last_eval_time'] = time.time()
           if USE_PYTORCH_DDP:
@@ -427,7 +430,10 @@ def train_once(
                             f'{global_step}, error : {str(e)}.')
             if torch.cuda.is_available():
               torch.cuda.empty_cache()
-        
+    train_state['accumulated_eval_time'] += time.time() - current_time
+    model_params.block_until_ready()
+  
+  train_state['total_accumulated_time'] = time.time() - global_start_time     
   metrics = {'eval_results': eval_results, 'global_step': global_step}
 
   if log_dir is not None:
@@ -507,7 +513,8 @@ def score_submission_on_workload(workload: spec.Workload,
     all_metrics = []
     for hi, hyperparameters in enumerate(tuning_search_space):
       # Generate a new seed from hardware sources of randomness for each trial.
-      rng_seed = struct.unpack('I', os.urandom(4))[0]
+      # rng_seed = struct.unpack('I', os.urandom(4))[0]
+      rng_seed = 1
       logging.info('Using RNG seed %d', rng_seed)
       rng = prng.PRNGKey(rng_seed)
       # Because we initialize the PRNGKey with only a single 32 bit int, in the
