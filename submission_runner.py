@@ -226,8 +226,6 @@ def train_once(
     log_dir: Optional[str] = None) -> Tuple[spec.Timing, Dict[str, Any]]:
   data_rng, opt_init_rng, model_init_rng, rng = prng.split(rng, 4)
   # Workload setup.
-  event = "Starting train once"
-  logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
   logging.info(f'Initializing dataset.')
   with profiler.profile('Initializing dataset'):
     input_queue = workload._build_input_queue(
@@ -235,8 +233,6 @@ def train_once(
         'train',
         data_dir=data_dir,
         global_batch_size=global_batch_size)
-  event = "After Initializing dataset"
-  logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
   logging.info('Initializing model.')
   with profiler.profile('Initializing model'):
     dropout_rate = None
@@ -247,8 +243,6 @@ def train_once(
       aux_dropout_rate = hyperparameters.aux_dropout_rate
     model_params, model_state = workload.init_model_fn(
         model_init_rng, dropout_rate, aux_dropout_rate)
-  event = "After Initializing model"
-  logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
   logging.info('Initializing optimizer.')
   with profiler.profile('Initializing optimizer'):
     optimizer_state = init_optimizer_state(workload,
@@ -256,8 +250,6 @@ def train_once(
                                            model_state,
                                            hyperparameters,
                                            opt_init_rng)
-  event = "After Initializing metrics bundle"
-  logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
   logging.info('Initializing metrics bundle.')
   # Bookkeeping.
   train_state = {
@@ -266,6 +258,7 @@ def train_once(
       'is_time_remaining': True,
       'last_eval_time': 0,
       'accumulated_submission_time': 0,
+      'accumulated_data_selection_time': 0,
       'accumulated_eval_time': 0,
       'total_accumulated_time:': 0,
       'training_complete': False,
@@ -303,15 +296,11 @@ def train_once(
     logger_utils.write_json(flag_file_name, flags.FLAGS.flag_values_dict())
     metrics_logger = logger_utils.set_up_loggers(log_dir, flags.FLAGS)
     workload.attach_metrics_logger(metrics_logger)
-  event = "After checkpoint and logger metrics bundle"
-  logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
   global_start_time = time.time()
   if USE_PYTORCH_DDP:
     # Make sure all processes start training at the same time.
     global_start_time = sync_ddp_time(global_start_time, DEVICE)
 
-  event = "Before starting training loop and logger metrics bundle"
-  logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
   logging.info('Starting training loop.')
   while train_state['is_time_remaining'] and \
       not train_state['validation_goal_reached'] and \
@@ -332,9 +321,11 @@ def train_once(
                              hyperparameters,
                              global_step,
                              data_select_rng)
-    if global_step <=1:
-      event = f"After dataselection batch at step {global_step}"
-      logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
+
+    data_selection_time = time.time()
+    if USE_PYTORCH_DDP:
+      data_selection_time = sync_ddp_time(data_selection_time, DEVICE)
+    
     try:
       with profiler.profile('Update parameters'):
         optimizer_state, model_params, model_state = update_params(
@@ -349,9 +340,6 @@ def train_once(
             eval_results=eval_results,
             global_step=global_step,
             rng=update_rng)
-      if global_step <=1:
-        event = f"After update parameters step {global_step}"
-        logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
     except spec.TrainingCompleteError:
       train_state['training_complete'] = True
     global_step += 1
@@ -366,13 +354,14 @@ def train_once(
     train_state['is_time_remaining'] = (
         train_state['accumulated_submission_time'] <
         workload.max_allowed_runtime_sec)
+
+    train_state['accumulated_data_selection_time'] += data_selection_time - start_time
+
     # Check if submission is eligible for an untimed eval.
     if ((current_time - train_state['last_eval_time']) >=
         workload.eval_period_time_sec or train_state['training_complete']) or (global_step == 1):
       with profiler.profile('Evaluation'):
         try:
-          event = f"Before eval at step {global_step}"
-          logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
           latest_eval_result = workload.eval_model(global_eval_batch_size,
                                                    model_params,
                                                    model_state,
@@ -381,12 +370,6 @@ def train_once(
                                                    imagenet_v2_data_dir,
                                                    global_step)
           time_since_start = current_time - global_start_time
-          logging.info(f'Time since start: {time_since_start:.2f}s, '
-                       f'\tStep: {global_step}, \t{latest_eval_result}')
-          latest_eval_result['score'] = (
-              train_state['accumulated_submission_time'])
-          latest_eval_result['total_duration'] = time_since_start
-          eval_results.append((global_step, latest_eval_result))
 
           train_state['validation_goal_reached'] = (
               workload.has_reached_validation_target(latest_eval_result) or
@@ -394,8 +377,21 @@ def train_once(
           train_state['test_goal_reached'] = (
               workload.has_reached_test_target(latest_eval_result) or
               train_state['test_goal_reached'])
-          event = f"After eval at step {global_step}"
-          logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
+          train_state['last_eval_time'] = time.time()
+          if USE_PYTORCH_DDP:
+            # Make sure all processes finish evaluation at the same time.
+            train_state['last_eval_time'] = sync_ddp_time(
+                train_state['last_eval_time'], DEVICE)
+          
+          latest_eval_result['score'] = (train_state['accumulated_submission_time'])
+          latest_eval_result['total_duration'] = time_since_start
+          latest_eval_result['accumulated_submission_time'] = train_state['accumulated_submission_time']
+          latest_eval_result['accumulated_data_selection_time'] = train_state['accumulated_data_selection_time']
+          latest_eval_result['accumulated_eval_time'] += train_state['last_eval_time'] - current_time
+          
+          logging.info(f'Time since start: {time_since_start:.2f}s, '
+                       f'\tStep: {global_step}, \t{latest_eval_result}')
+          eval_results.append((global_step, latest_eval_result))
 
           if log_dir is not None:
             metrics_logger.append_scalar_metrics(
@@ -415,13 +411,7 @@ def train_once(
             #     checkpoint_dir=log_dir,
             #     save_intermediate_checkpoints=FLAGS
             #     .save_intermediate_checkpoints)
-          event = f"After logging (checkpointing disabled) eval at step {global_step}"
-          logging.info(f"{event}: RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}") 
-          train_state['last_eval_time'] = time.time()
-          if USE_PYTORCH_DDP:
-            # Make sure all processes finish evaluation at the same time.
-            train_state['last_eval_time'] = sync_ddp_time(
-                train_state['last_eval_time'], DEVICE)
+
 
         except RuntimeError as e:
           logging.exception(f'Eval step {global_step} error.\n')
@@ -430,10 +420,10 @@ def train_once(
                             f'{global_step}, error : {str(e)}.')
             if torch.cuda.is_available():
               torch.cuda.empty_cache()
-    train_state['accumulated_eval_time'] += time.time() - current_time
+
+
   model_params.block_until_ready()
   
-  train_state['total_accumulated_time'] = time.time() - global_start_time     
   metrics = {'eval_results': eval_results, 'global_step': global_step}
 
   if log_dir is not None:
