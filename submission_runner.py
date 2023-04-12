@@ -386,6 +386,7 @@ def train_once(
           
           latest_eval_result['score'] = (train_state['accumulated_submission_time'])
           latest_eval_result['total_duration'] = time_since_start
+          latest_eval_result['total_duration_all_inclusive'] = train_state['last_eval_time'] - global_start_time
           latest_eval_result['accumulated_submission_time'] = train_state['accumulated_submission_time']
           latest_eval_result['accumulated_data_selection_time'] = train_state['accumulated_data_selection_time']
           latest_eval_result['accumulated_eval_time'] = train_state['accumulated_eval_time'] 
