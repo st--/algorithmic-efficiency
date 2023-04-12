@@ -382,12 +382,13 @@ def train_once(
             # Make sure all processes finish evaluation at the same time.
             train_state['last_eval_time'] = sync_ddp_time(
                 train_state['last_eval_time'], DEVICE)
+          train_state['accumulated_eval_time'] += train_state['last_eval_time'] - current_time
           
           latest_eval_result['score'] = (train_state['accumulated_submission_time'])
           latest_eval_result['total_duration'] = time_since_start
           latest_eval_result['accumulated_submission_time'] = train_state['accumulated_submission_time']
           latest_eval_result['accumulated_data_selection_time'] = train_state['accumulated_data_selection_time']
-          latest_eval_result['accumulated_eval_time'] += train_state['last_eval_time'] - current_time
+          latest_eval_result['accumulated_eval_time'] = train_state['accumulated_eval_time'] 
           
           logging.info(f'Time since start: {time_since_start:.2f}s, '
                        f'\tStep: {global_step}, \t{latest_eval_result}')
