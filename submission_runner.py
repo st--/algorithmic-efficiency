@@ -395,11 +395,11 @@ def train_once(
                        f'\tStep: {global_step}, \t{latest_eval_result}')
           eval_results.append((global_step, latest_eval_result))
 
-          if log_dir is not None:
-            metrics_logger.append_scalar_metrics(
-                latest_eval_result,
-                global_step=global_step,
-                preemption_count=preemption_count)
+#          if log_dir is not None:
+#            metrics_logger.append_scalar_metrics(
+#                latest_eval_result,
+#                global_step=global_step,
+#                preemption_count=preemption_count)
             # Disable checkpointing
             # checkpoint_utils.save_checkpoint(
             #     framework=FLAGS.framework,
