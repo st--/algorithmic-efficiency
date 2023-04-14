@@ -305,10 +305,10 @@ def train_once(
   while train_state['is_time_remaining'] and \
       not train_state['validation_goal_reached'] and \
       not train_state['test_goal_reached'] and \
-      not train_state['training_complete']:
+      not train_state['training_complete']:      
+    start_time = time.time()
     step_rng = prng.fold_in(rng, global_step)
     data_select_rng, update_rng, eval_rng = prng.split(step_rng, 3)
-    start_time = time.time()
     if USE_PYTORCH_DDP:
       start_time = sync_ddp_time(start_time, DEVICE)
 
