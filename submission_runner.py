@@ -436,7 +436,7 @@ def train_once(
         checkpoint_dir=log_dir,
         save_intermediate_checkpoints=FLAGS.save_intermediate_checkpoints)
 
-  return train_state['total_submission_time'], metrics
+  return train_state['accumulated_submission_time'], metrics
 
 
 def score_submission_on_workload(workload: spec.Workload,
