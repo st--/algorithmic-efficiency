@@ -296,6 +296,7 @@ def train_once(
     logger_utils.write_json(flag_file_name, flags.FLAGS.flag_values_dict())
     metrics_logger = logger_utils.set_up_loggers(log_dir, flags.FLAGS)
     workload.attach_metrics_logger(metrics_logger)
+  # Get global start time
   global_start_time = time.time()
   if USE_PYTORCH_DDP:
     # Make sure all processes start training at the same time.
@@ -306,12 +307,14 @@ def train_once(
       not train_state['validation_goal_reached'] and \
       not train_state['test_goal_reached'] and \
       not train_state['training_complete']:      
-    start_time = time.time()
     if USE_PYTORCH_DDP:
       start_time = sync_ddp_time(start_time, DEVICE)
     step_rng = prng.fold_in(rng, global_step)
     data_select_rng, update_rng, eval_rng = prng.split(step_rng, 3)
-
+  
+    train_step_start_time = time.time()
+    if USE_PYTORCH_DDP:
+      train_step_start_time = sync_ddp_time(train_step_start_time, DEVICE)
     with profiler.profile('Data selection'):
       batch = data_selection(workload,
                              input_queue,
@@ -342,19 +345,17 @@ def train_once(
     if (max_global_steps is not None) and (global_step == max_global_steps):
       train_state['training_complete'] = True
 
-    current_time = time.time()
+    train_step_end_time = time.time()
     if USE_PYTORCH_DDP:
-      current_time = sync_ddp_time(current_time, DEVICE)
+      train_step_end_time= sync_ddp_time(train_step_end_time, DEVICE)
 
-    train_state['total_duration'] = time.time() - global_start_time
-    train_state['total_submission_time'] =  train_state['total_duration'] - train_state['accumulated_eval_time']
+    train_state['accumulated_submission_time'] +=  train_step_start_time - train_step_end_time
     train_state['is_time_remaining'] = (
-        train_state['total_submission_time'] <
+        train_state['accumulated_submission_time'] <
         workload.max_allowed_runtime_sec)
 
-
     # Check if submission is eligible for an untimed eval.
-    if ((current_time - train_state['last_eval_time']) >=
+    if ((train_step_end_time - train_state['last_eval_time']) >=
         workload.eval_period_time_sec or train_state['training_complete']) or (global_step == 1):
       with profiler.profile('Evaluation'):
         try:
@@ -379,19 +380,12 @@ def train_once(
             train_state['last_eval_time'] = sync_ddp_time(
                 train_state['last_eval_time'], DEVICE)
 
-          # Update accumulated eval time
-          train_state['accumulated_eval_time'] += train_state['last_eval_time'] - current_time
           
           # Add times to eval results for logging
           latest_eval_result['score'] = (train_state['total_submission_time'])
           latest_eval_result['total_duration'] = train_state['last_eval_time'] - global_start_time
-          latest_eval_result['total_submission_time'] = train_state['total_submission_time']
-          latest_eval_result['accumulated_eval_time'] = train_state['accumulated_eval_time'] 
+          latest_eval_result['accumulated_submission_time'] = train_state['accumulated_submission_time']
           
-          log_and_checkpoint_start_time = time.time()
-          if USE_PYTORCH_DDP:
-            log_and_checkpoint_start_time = sync_ddp_time(
-              log_and_checkpoint_start_time, DEVICE)
           logging.info(f'Time since start: {time_since_start:.2f}s, '
                        f'\tStep: {global_step}, \t{latest_eval_result}')
           eval_results.append((global_step, latest_eval_result))
@@ -413,12 +407,6 @@ def train_once(
               checkpoint_dir=log_dir,
               save_intermediate_checkpoints=FLAGS
               .save_intermediate_checkpoints)
-          # Add logging and checkpointing overhead to accumulated eval time
-          log_and_checkpoint_end_time = time.time()
-          if USE_PYTORCH_DDP:
-            log_and_checkpoint_end_time = sync_ddp_time(
-              log_and_checkpoint_end_time, DEVICE)
-          train_state['accumulated_eval_time'] += log_and_checkpoint_end_time - log_and_checkpoint_start_time
 
         except RuntimeError as e:
           logging.exception(f'Eval step {global_step} error.\n')
@@ -427,15 +415,12 @@ def train_once(
                             f'{global_step}, error : {str(e)}.')
             if torch.cuda.is_available():
               torch.cuda.empty_cache()
-
-
-  model_params.block_until_ready()
   
   metrics = {'eval_results': eval_results, 'global_step': global_step}
 
   if log_dir is not None:
     metrics_logger.append_scalar_metrics(
-        {'score': train_state['total_submission_time']},
+        {'score': train_state['accumulated_submission_time']},
         global_step=global_step,
         preemption_count=preemption_count)
     metrics_logger.finish()
