@@ -384,11 +384,14 @@ def train_once(
           
           # Add times to eval results for logging
           latest_eval_result['score'] = (train_state['total_submission_time'])
-          latest_eval_result['total_duration'] = time.time() - global_start_time
+          latest_eval_result['total_duration'] = train_state['last_eval_time'] - global_start_time
           latest_eval_result['total_submission_time'] = train_state['total_submission_time']
           latest_eval_result['accumulated_eval_time'] = train_state['accumulated_eval_time'] 
           
           log_and_checkpoint_start_time = time.time()
+          if USE_PYTORCH_DDP:
+            log_and_checkpoint_start_time = sync_ddp_time(
+              log_and_checkpoint_start_time, DEVICE)
           logging.info(f'Time since start: {time_since_start:.2f}s, '
                        f'\tStep: {global_step}, \t{latest_eval_result}')
           eval_results.append((global_step, latest_eval_result))
@@ -410,7 +413,12 @@ def train_once(
               checkpoint_dir=log_dir,
               save_intermediate_checkpoints=FLAGS
               .save_intermediate_checkpoints)
-          train_state['accumulated_eval_time'] += time.time() - log_and_checkpoint_start_time
+          # Add logging and checkpointing overhead to accumulated eval time
+          log_and_checkpoint_end_time = time.time()
+          if USE_PYTORCH_DDP:
+            log_and_checkpoint_end_time = sync_ddp_time(
+              log_and_checkpoint_end_time, DEVICE)
+          train_state['accumulated_eval_time'] += log_and_checkpoint_end_time - log_and_checkpoint_start_time
 
         except RuntimeError as e:
           logging.exception(f'Eval step {global_step} error.\n')
