@@ -258,9 +258,6 @@ def train_once(
       'is_time_remaining': True,
       'last_eval_time': 0,
       'accumulated_submission_time': 0,
-      'accumulated_data_selection_time': 0,
-      'accumulated_eval_time': 0,
-      'total_accumulated_time:': 0,
       'training_complete': False,
   }
   global_step = 0
@@ -382,7 +379,7 @@ def train_once(
 
           
           # Add times to eval results for logging
-          latest_eval_result['score'] = (train_state['total_submission_time'])
+          latest_eval_result['score'] = (train_state['acccumulated_submission_time'])
           latest_eval_result['total_duration'] = train_state['last_eval_time'] - global_start_time
           latest_eval_result['accumulated_submission_time'] = train_state['accumulated_submission_time']
           
