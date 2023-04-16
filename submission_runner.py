@@ -379,7 +379,7 @@ def train_once(
 
           
           # Add times to eval results for logging
-          latest_eval_result['score'] = (train_state['acccumulated_submission_time'])
+          latest_eval_result['score'] = (train_state['accumulated_submission_time'])
           latest_eval_result['total_duration'] = train_state['last_eval_time'] - global_start_time
           latest_eval_result['accumulated_submission_time'] = train_state['accumulated_submission_time']
           
