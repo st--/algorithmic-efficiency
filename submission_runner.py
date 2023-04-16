@@ -307,10 +307,10 @@ def train_once(
       not train_state['test_goal_reached'] and \
       not train_state['training_complete']:      
     start_time = time.time()
-    step_rng = prng.fold_in(rng, global_step)
-    data_select_rng, update_rng, eval_rng = prng.split(step_rng, 3)
     if USE_PYTORCH_DDP:
       start_time = sync_ddp_time(start_time, DEVICE)
+    step_rng = prng.fold_in(rng, global_step)
+    data_select_rng, update_rng, eval_rng = prng.split(step_rng, 3)
 
     with profiler.profile('Data selection'):
       batch = data_selection(workload,
@@ -321,10 +321,6 @@ def train_once(
                              hyperparameters,
                              global_step,
                              data_select_rng)
-
-    data_selection_time = time.time()
-    if USE_PYTORCH_DDP:
-      data_selection_time = sync_ddp_time(data_selection_time, DEVICE)
     
     try:
       with profiler.profile('Update parameters'):
@@ -350,12 +346,12 @@ def train_once(
     if USE_PYTORCH_DDP:
       current_time = sync_ddp_time(current_time, DEVICE)
 
-    train_state['accumulated_submission_time'] += current_time - start_time
+    train_state['total_duration'] = time.time() - global_start_time
+    train_state['total_submission_time'] =  train_state['total_duration'] - train_state['accumulated_eval_time']
     train_state['is_time_remaining'] = (
-        train_state['accumulated_submission_time'] <
+        train_state['total_submission_time'] <
         workload.max_allowed_runtime_sec)
 
-    train_state['accumulated_data_selection_time'] += data_selection_time - start_time
 
     # Check if submission is eligible for an untimed eval.
     if ((current_time - train_state['last_eval_time']) >=
@@ -369,51 +365,52 @@ def train_once(
                                                    data_dir,
                                                    imagenet_v2_data_dir,
                                                    global_step)
-          time_since_start = current_time - global_start_time
-
+          # Check if targets reached
           train_state['validation_goal_reached'] = (
               workload.has_reached_validation_target(latest_eval_result) or
               train_state['validation_goal_reached'])
           train_state['test_goal_reached'] = (
               workload.has_reached_test_target(latest_eval_result) or
               train_state['test_goal_reached'])
+          # Save last eval time
           train_state['last_eval_time'] = time.time()
           if USE_PYTORCH_DDP:
             # Make sure all processes finish evaluation at the same time.
             train_state['last_eval_time'] = sync_ddp_time(
                 train_state['last_eval_time'], DEVICE)
+
+          # Update accumulated eval time
           train_state['accumulated_eval_time'] += train_state['last_eval_time'] - current_time
           
-          latest_eval_result['score'] = (train_state['accumulated_submission_time'])
-          latest_eval_result['total_duration'] = time_since_start
-          latest_eval_result['total_duration_all_inclusive'] = train_state['last_eval_time'] - global_start_time
-          latest_eval_result['accumulated_submission_time'] = train_state['accumulated_submission_time']
-          latest_eval_result['accumulated_data_selection_time'] = train_state['accumulated_data_selection_time']
+          # Add times to eval results for logging
+          latest_eval_result['score'] = (train_state['total_submission_time'])
+          latest_eval_result['total_duration'] = time.time() - global_start_time
+          latest_eval_result['total_submission_time'] = train_state['total_submission_time']
           latest_eval_result['accumulated_eval_time'] = train_state['accumulated_eval_time'] 
           
+          log_and_checkpoint_start_time = time.time()
           logging.info(f'Time since start: {time_since_start:.2f}s, '
                        f'\tStep: {global_step}, \t{latest_eval_result}')
           eval_results.append((global_step, latest_eval_result))
-
-#          if log_dir is not None:
-#            metrics_logger.append_scalar_metrics(
-#                latest_eval_result,
-#                global_step=global_step,
-#                preemption_count=preemption_count)
-            # Disable checkpointing
-            # checkpoint_utils.save_checkpoint(
-            #     framework=FLAGS.framework,
-            #     optimizer_state=optimizer_state,
-            #     model_params=model_params,
-            #     model_state=model_state,
-            #     train_state=train_state,
-            #     eval_results=eval_results,
-            #     global_step=global_step,
-            #     preemption_count=preemption_count,
-            #     checkpoint_dir=log_dir,
-            #     save_intermediate_checkpoints=FLAGS
-            #     .save_intermediate_checkpoints)
-
+          if log_dir is not None:
+           metrics_logger.append_scalar_metrics(
+               latest_eval_result,
+               global_step=global_step,
+               preemption_count=preemption_count)
+          # Disable checkpointing
+          checkpoint_utils.save_checkpoint(
+              framework=FLAGS.framework,
+              optimizer_state=optimizer_state,
+              model_params=model_params,
+              model_state=model_state,
+              train_state=train_state,
+              eval_results=eval_results,
+              global_step=global_step,
+              preemption_count=preemption_count,
+              checkpoint_dir=log_dir,
+              save_intermediate_checkpoints=FLAGS
+              .save_intermediate_checkpoints)
+          train_state['accumulated_eval_time'] += time.time() - log_and_checkpoint_start_time
 
         except RuntimeError as e:
           logging.exception(f'Eval step {global_step} error.\n')
@@ -430,7 +427,7 @@ def train_once(
 
   if log_dir is not None:
     metrics_logger.append_scalar_metrics(
-        {'score': train_state['accumulated_submission_time']},
+        {'score': train_state['total_submission_time']},
         global_step=global_step,
         preemption_count=preemption_count)
     metrics_logger.finish()
@@ -446,7 +443,7 @@ def train_once(
         checkpoint_dir=log_dir,
         save_intermediate_checkpoints=FLAGS.save_intermediate_checkpoints)
 
-  return train_state['accumulated_submission_time'], metrics
+  return train_state['total_submission_time'], metrics
 
 
 def score_submission_on_workload(workload: spec.Workload,
