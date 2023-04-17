@@ -383,7 +383,7 @@ def train_once(
           latest_eval_result['total_duration'] = train_state['last_eval_time'] - global_start_time
           latest_eval_result['accumulated_submission_time'] = train_state['accumulated_submission_time']
           
-          logging.info(f'Time since start: {time_since_start:.2f}s, '
+          logging.info(f'Time since start: {latest_eval_result['total_duration']:.2f}s, '
                        f'\tStep: {global_step}, \t{latest_eval_result}')
           eval_results.append((global_step, latest_eval_result))
           if log_dir is not None:
