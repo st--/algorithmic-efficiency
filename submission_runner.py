@@ -224,7 +224,8 @@ def train_once(
     profiler: Profiler,
     max_global_steps: int = None,
     log_dir: Optional[str] = None,
-    save_checkpoints: Optional[bool] = True) -> Tuple[spec.Timing, Dict[str, Any]]:
+    save_checkpoints: Optional[bool] = True
+) -> Tuple[spec.Timing, Dict[str, Any]]:
   data_rng, opt_init_rng, model_init_rng, rng = prng.split(rng, 4)
 
   # Workload setup.
@@ -312,10 +313,10 @@ def train_once(
   while train_state['is_time_remaining'] and \
       not goals_reached and \
       not train_state['training_complete']:
-    
+
     step_rng = prng.fold_in(rng, global_step)
     data_select_rng, update_rng, eval_rng = prng.split(step_rng, 3)
-  
+
     train_step_start_time = time.time()
     if USE_PYTORCH_DDP:
       train_step_start_time = sync_ddp_time(train_step_start_time, DEVICE)
@@ -350,15 +351,17 @@ def train_once(
 
     train_step_end_time = time.time()
     if USE_PYTORCH_DDP:
-      train_step_end_time= sync_ddp_time(train_step_end_time, DEVICE)
+      train_step_end_time = sync_ddp_time(train_step_end_time, DEVICE)
 
-    train_state['accumulated_submission_time'] +=  train_step_end_time - train_step_start_time
+    train_state[
+        'accumulated_submission_time'] += train_step_end_time - train_step_start_time
     train_state['is_time_remaining'] = (
         train_state['accumulated_submission_time'] <
         workload.max_allowed_runtime_sec)
     # Check if submission is eligible for an untimed eval.
     if ((train_step_end_time - train_state['last_eval_time']) >=
-        workload.eval_period_time_sec or train_state['training_complete']) or (global_step == 1):
+        workload.eval_period_time_sec or
+        train_state['training_complete']) or (global_step == 1):
       with profiler.profile('Evaluation'):
         try:
           eval_start_time = time.time()
@@ -382,16 +385,22 @@ def train_once(
           eval_end_time = time.time()
           if USE_PYTORCH_DDP:
             eval_end_time = sync_ddp_time(eval_end_time, DEVICE)
-          
+
           # Accumulate eval time
-          train_state['accumulated_eval_time'] += eval_end_time - eval_start_time
-          
+          train_state[
+              'accumulated_eval_time'] += eval_end_time - eval_start_time
+
           # Add times to eval results for logging
-          latest_eval_result['score'] = (train_state['accumulated_submission_time'])
-          latest_eval_result['total_duration'] = eval_end_time - global_start_time
-          latest_eval_result['accumulated_submission_time'] = train_state['accumulated_submission_time']
-          latest_eval_result['accumulated_eval_time'] = train_state['accumulated_eval_time']
-          latest_eval_result['accumulated_logging_time'] = train_state['accumulated_logging_time']
+          latest_eval_result['score'] = (
+              train_state['accumulated_submission_time'])
+          latest_eval_result[
+              'total_duration'] = eval_end_time - global_start_time
+          latest_eval_result['accumulated_submission_time'] = train_state[
+              'accumulated_submission_time']
+          latest_eval_result['accumulated_eval_time'] = train_state[
+              'accumulated_eval_time']
+          latest_eval_result['accumulated_logging_time'] = train_state[
+              'accumulated_logging_time']
           time_since_start = latest_eval_result['total_duration']
           logging.info(f'Time since start: {time_since_start:.2f}s, '
                        f'\tStep: {global_step}, \t{latest_eval_result}')
@@ -423,7 +432,8 @@ def train_once(
             logging_end_time = sync_ddp_time(checkpoint_end_time, DEVICE)
 
           train_state['last_eval_time'] = logging_end_time
-          train_state['accumulated_logging_time'] += logging_end_time - logging_start_time
+          train_state[
+              'accumulated_logging_time'] += logging_end_time - logging_start_time
 
         except RuntimeError as e:
           logging.exception(f'Eval step {global_step} error.\n')
@@ -605,17 +615,18 @@ def main(_):
                                               experiment_name,
                                               FLAGS.resume_last_run)
 
-  score = score_submission_on_workload(workload=workload,
-                                       workload_name=FLAGS.workload,
-                                       submission_path=FLAGS.submission_path,
-                                       data_dir=FLAGS.data_dir,
-                                       tuning_ruleset=FLAGS.tuning_ruleset,
-                                       profiler=profiler,
-                                       max_global_steps=FLAGS.max_global_steps,
-                                       imagenet_v2_data_dir=FLAGS.imagenet_v2_data_dir,
-                                       tuning_search_space=FLAGS.tuning_search_space,
-                                       num_tuning_trials=FLAGS.num_tuning_trials,
-                                       log_dir=logging_dir_path)
+  score = score_submission_on_workload(
+      workload=workload,
+      workload_name=FLAGS.workload,
+      submission_path=FLAGS.submission_path,
+      data_dir=FLAGS.data_dir,
+      tuning_ruleset=FLAGS.tuning_ruleset,
+      profiler=profiler,
+      max_global_steps=FLAGS.max_global_steps,
+      imagenet_v2_data_dir=FLAGS.imagenet_v2_data_dir,
+      tuning_search_space=FLAGS.tuning_search_space,
+      num_tuning_trials=FLAGS.num_tuning_trials,
+      log_dir=logging_dir_path)
   logging.info(f'Final {FLAGS.workload} score: {score}')
 
   if FLAGS.profile:

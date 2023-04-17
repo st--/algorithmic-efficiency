@@ -20,7 +20,6 @@ class Criteo1TbDlrmSmallWorkload(BaseCriteo1TbDlrmSmallWorkload):
     # return 524_288
     return 65536
 
-
   def _per_example_sigmoid_binary_cross_entropy(
       self, logits: spec.Tensor, targets: spec.Tensor) -> spec.Tensor:
     """Computes the sigmoid binary cross entropy per example.

@@ -4,43 +4,48 @@ import jax
 import psutil
 import tracemalloc
 import linecache
-import os 
+import os
+
 
 def display_top(snapshot, key_type='lineno', limit=10):
-    snapshot = snapshot.filter_traces((tracemalloc.Filter(False, "<frozen importlib._bootstrap>"), tracemalloc.Filter(False, "<unknown>"),))
-    top_stats = snapshot.statistics(key_type)
+  snapshot = snapshot.filter_traces((
+      tracemalloc.Filter(False, "<frozen importlib._bootstrap>"),
+      tracemalloc.Filter(False, "<unknown>"),
+  ))
+  top_stats = snapshot.statistics(key_type)
 
-    print("Top %s lines" % limit)
-    for index, stat in enumerate(top_stats[:limit], 1):
-        frame = stat.traceback[0]
-        print("#%s: %s:%s: %.1f KiB" % (index, frame.filename, frame.lineno, stat.size / 1024))
-        line = linecache.getline(frame.filename, frame.lineno).strip()
-        if line:
-            print('    %s' % line)
+  print("Top %s lines" % limit)
+  for index, stat in enumerate(top_stats[:limit], 1):
+    frame = stat.traceback[0]
+    print("#%s: %s:%s: %.1f KiB" %
+          (index, frame.filename, frame.lineno, stat.size / 1024))
+    line = linecache.getline(frame.filename, frame.lineno).strip()
+    if line:
+      print('    %s' % line)
 
-        other = top_stats[limit:]
-        if other:
-            size = sum(stat.size for stat in other)
-            print("%s other: %.1f KiB" % (len(other), size / 1024))
-            total = sum(stat.size for stat in top_stats)
-            print("Total allocated size: %.1f KiB" % (total / 1024))
+    other = top_stats[limit:]
+    if other:
+      size = sum(stat.size for stat in other)
+      print("%s other: %.1f KiB" % (len(other), size / 1024))
+      total = sum(stat.size for stat in top_stats)
+      print("Total allocated size: %.1f KiB" % (total / 1024))
 
 
 tracemalloc.start()
 print("getting dataset")
-ds = input_pipeline.get_criteo1tb_dataset(split='train', 
-                                        shuffle_rng=jax.random.PRNGKey(0), 
-                                        data_dir='/home/kasimbeg/data/criteo1tb',
-                                        num_dense_features=13,
-                                        global_batch_size=262_144,
+ds = input_pipeline.get_criteo1tb_dataset(
+    split='train',
+    shuffle_rng=jax.random.PRNGKey(0),
+    data_dir='/home/kasimbeg/data/criteo1tb',
+    num_dense_features=13,
+    global_batch_size=262_144,
 )
 
 print("iterating dataset")
 print(f"Batch: {0}. RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
 for i in range(1000):
-    next_batch = next(ds)
-    if (i % 100 == 0):
-        print(f"Batch: {i}. RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
+  next_batch = next(ds)
+  if (i % 100 == 0):
+    print(f"Batch: {i}. RAM USED (GB) {psutil.virtual_memory()[3]/1000000000}")
 snapshot = tracemalloc.take_snapshot()
 display_top(snapshot)
-

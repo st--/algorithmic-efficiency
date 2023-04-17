@@ -242,5 +242,5 @@ def save_checkpoint(framework: str,
   del checkpoint_state
   del model_params
   del opt_state
-  
-  return 
+
+  return
