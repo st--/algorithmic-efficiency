@@ -14,11 +14,11 @@ import psutil
 from algorithmic_efficiency import spec
 from algorithmic_efficiency.pytorch_utils import pytorch_setup
 
-try:
-  import wandb  # pylint: disable=g-import-not-at-top
-except ModuleNotFoundError:
-  logging.exception('Unable to import wandb.')
-  wandb = None
+# try:
+#   import wandb  # pylint: disable=g-import-not-at-top
+# except ModuleNotFoundError:
+#   logging.exception('Unable to import wandb.')
+wandb = None
 
 USE_PYTORCH_DDP, RANK, DEVICE, N_GPUS = pytorch_setup()
 
