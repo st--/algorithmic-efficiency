@@ -14,6 +14,13 @@ class BaseImagenetResNetWorkload(spec.Workload):
   def target_metric_name(self) -> str:
     """The name of the target metric (useful for scoring/processing code)."""
     return 'accuracy'
+  def batch_norm_scale_init(self) -> float:
+    return 0.0
+
+  @property
+  def activation_fn_name(self) -> str:
+    """Name of the activation function to use. One of 'relu', 'gelu', 'silu'."""
+    return 'relu'
 
   def has_reached_validation_target(self, eval_result: Dict[str,
                                                             float]) -> bool:

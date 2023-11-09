@@ -43,6 +43,7 @@ from algorithmic_efficiency import halton
 from algorithmic_efficiency import logger_utils
 from algorithmic_efficiency import random_utils as prng
 from algorithmic_efficiency import spec
+from algorithmic_efficiency import workload_utils
 from algorithmic_efficiency.profiler import PassThroughProfiler
 from algorithmic_efficiency.profiler import Profiler
 from algorithmic_efficiency.pytorch_utils import pytorch_init
@@ -67,7 +68,8 @@ flags.DEFINE_string(
 flags.DEFINE_string(
     'workload',
     None,
-    help=f'The name of the workload to run.\n Choices: {list(WORKLOADS.keys())}'
+    'The name of the workload to run.\n Choices: '
+    f'{workload_utils.workload_names()}'
 )
 flags.DEFINE_enum(
     'tuning_ruleset',
