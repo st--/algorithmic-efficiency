@@ -39,91 +39,7 @@ def _instance_norm2d(x, axes, epsilon=1e-5):
   return y
 
 
-class ConvBlock(nn.Module):
-  """A Convolutional Block.
-  out_channels: Number of channels in the output.
-  dropout_rate: Dropout probability.
-  """
-  out_channels: int
-  dropout_rate: float
-  use_tanh: bool
-  use_layer_norm: bool
 
-  @nn.compact
-  def __call__(self, x, train=True):
-    """Forward function.
-    Note: Pytorch is NCHW and jax/flax is NHWC.
-    Args:
-        x: Input 4D tensor of shape `(N, H, W, in_channels)`.
-        train: deterministic or not (use init2winit naming).
-    Returns:
-        jnp.array: Output tensor of shape `(N, H, W, out_channels)`.
-    """
-    x = nn.Conv(
-        features=self.out_channels,
-        kernel_size=(3, 3),
-        strides=(1, 1),
-        use_bias=False)(x)
-    if self.use_layer_norm:
-      x = nn.LayerNorm()(x)
-    else:
-      # DO NOT SUBMIT check that this comment edit is correct
-      # InstanceNorm2d was run with no learnable params in reference code
-      # so this is a simple normalization along spatial dims.
-      x = _instance_norm2d(x, (1, 2))
-    if self.use_tanh:
-      activation_fn = nn.tanh
-    else:
-      activation_fn = functools.partial(jax.nn.leaky_relu, negative_slope=0.2)
-    x = activation_fn(x)
-    # Ref code uses dropout2d which applies the same mask for the entire channel
-    # Replicated by using broadcast dims to have the same filter on HW
-    x = nn.Dropout(
-        self.dropout_rate, broadcast_dims=(1, 2), deterministic=not train)(x)
-    x = nn.Conv(
-        features=self.out_channels,
-        kernel_size=(3, 3),
-        strides=(1, 1),
-        use_bias=False)(x)
-    if self.use_layer_norm:
-      x = nn.LayerNorm()(x)
-    else:
-      x = _instance_norm2d(x, (1, 2))
-    x = activation_fn(x)
-    x = nn.Dropout(
-        self.dropout_rate, broadcast_dims=(1, 2), deterministic=not train)(x)
-    return x
-
-
-class TransposeConvBlock(nn.Module):
-  """A Transpose Convolutional Block.
-  out_channels: Number of channels in the output.
-  """
-  out_channels: int
-  use_tanh: bool
-  use_layer_norm: bool
-
-  @nn.compact
-  def __call__(self, x):
-    """Forward function.
-    Args:
-        x: Input 4D tensor of shape `(N, H, W, in_channels)`.
-    Returns:
-        jnp.array: Output tensor of shape `(N, H*2, W*2, out_channels)`.
-    """
-    x = nn.ConvTranspose(
-        self.out_channels, kernel_size=(2, 2), strides=(2, 2), use_bias=False)(
-            x)
-    if self.use_layer_norm:
-      x = nn.LayerNorm()(x)
-    else:
-      x = _instance_norm2d(x, (1, 2))
-    if self.use_tanh:
-      activation_fn = nn.tanh
-    else:
-      activation_fn = functools.partial(jax.nn.leaky_relu, negative_slope=0.2)
-    x = activation_fn(x)
-    return x
 
 
 class UNet(nn.Module):
@@ -213,3 +129,88 @@ class UNet(nn.Module):
     out_channels = 1
     output = nn.Conv(out_channels, kernel_size=(1, 1), strides=(1, 1))(output)
     return output.squeeze(-1)
+class ConvBlock(nn.Module):
+  """A Convolutional Block.
+  out_channels: Number of channels in the output.
+  dropout_rate: Dropout probability.
+  """
+  out_channels: int
+  dropout_rate: float
+  use_tanh: bool
+  use_layer_norm: bool
+
+  @nn.compact
+  def __call__(self, x, train=True):
+    """Forward function.
+    Note: Pytorch is NCHW and jax/flax is NHWC.
+    Args:
+        x: Input 4D tensor of shape `(N, H, W, in_channels)`.
+        train: deterministic or not (use init2winit naming).
+    Returns:
+        jnp.array: Output tensor of shape `(N, H, W, out_channels)`.
+    """
+    x = nn.Conv(
+        features=self.out_channels,
+        kernel_size=(3, 3),
+        strides=(1, 1),
+        use_bias=False)(x)
+    if self.use_layer_norm:
+      x = nn.LayerNorm()(x)
+    else:
+      # DO NOT SUBMIT check that this comment edit is correct
+      # InstanceNorm2d was run with no learnable params in reference code
+      # so this is a simple normalization along spatial dims.
+      x = _instance_norm2d(x, (1, 2))
+    if self.use_tanh:
+      activation_fn = nn.tanh
+    else:
+      activation_fn = functools.partial(jax.nn.leaky_relu, negative_slope=0.2)
+    x = activation_fn(x)
+    # Ref code uses dropout2d which applies the same mask for the entire channel
+    # Replicated by using broadcast dims to have the same filter on HW
+    x = nn.Dropout(
+        self.dropout_rate, broadcast_dims=(1, 2), deterministic=not train)(x)
+    x = nn.Conv(
+        features=self.out_channels,
+        kernel_size=(3, 3),
+        strides=(1, 1),
+        use_bias=False)(x)
+    if self.use_layer_norm:
+      x = nn.LayerNorm()(x)
+    else:
+      x = _instance_norm2d(x, (1, 2))
+    x = activation_fn(x)
+    x = nn.Dropout(
+        self.dropout_rate, broadcast_dims=(1, 2), deterministic=not train)(x)
+    return x
+
+
+class TransposeConvBlock(nn.Module):
+  """A Transpose Convolutional Block.
+  out_channels: Number of channels in the output.
+  """
+  out_channels: int
+  use_tanh: bool
+  use_layer_norm: bool
+
+  @nn.compact
+  def __call__(self, x):
+    """Forward function.
+    Args:
+        x: Input 4D tensor of shape `(N, H, W, in_channels)`.
+    Returns:
+        jnp.array: Output tensor of shape `(N, H*2, W*2, out_channels)`.
+    """
+    x = nn.ConvTranspose(
+        self.out_channels, kernel_size=(2, 2), strides=(2, 2), use_bias=False)(
+            x)
+    if self.use_layer_norm:
+      x = nn.LayerNorm()(x)
+    else:
+      x = _instance_norm2d(x, (1, 2))
+    if self.use_tanh:
+      activation_fn = nn.tanh
+    else:
+      activation_fn = functools.partial(jax.nn.leaky_relu, negative_slope=0.2)
+    x = activation_fn(x)
+    return x

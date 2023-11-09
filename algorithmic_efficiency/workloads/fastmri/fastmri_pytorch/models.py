@@ -14,64 +14,6 @@ from torch.nn import functional as F
 from algorithmic_efficiency import init_utils
 
 
-class ConvBlock(nn.Module):
-  # A Convolutional Block that consists of two convolution layers each
-  # followed by instance normalization, LeakyReLU activation and dropout_rate.
-
-  def __init__(self,
-               in_chans: int,
-               out_chans: int,
-               dropout_rate: float,
-               use_tanh: bool,
-               use_layer_norm: bool) -> None:
-    super().__init__()
-
-    if use_layer_norm:
-      norm_layer = nn.LayerNorm
-    else:
-      norm_layer = nn.InstanceNorm2d
-    if use_tanh:
-      activation_fn = nn.Tanh(inplace=True)
-    else:
-      activation_fn = nn.LeakyReLU(negative_slope=0.2, inplace=True)
-    self.conv_layers = nn.Sequential(
-        nn.Conv2d(in_chans, out_chans, kernel_size=3, padding=1, bias=False),
-        norm_layer(out_chans),
-        activation_fn,
-        nn.Dropout2d(dropout_rate),
-        nn.Conv2d(out_chans, out_chans, kernel_size=3, padding=1, bias=False),
-        norm_layer(out_chans),
-        activation_fn,
-        nn.Dropout2d(dropout_rate),
-    )
-
-  def forward(self, x: Tensor) -> Tensor:
-    return self.conv_layers(x)
-
-
-class TransposeConvBlock(nn.Module):
-  # A Transpose Convolutional Block that consists of one convolution transpose
-  # layers followed by instance normalization and LeakyReLU activation.
-
-  def __init__(self, in_chans: int, out_chans: int):
-    super().__init__()
-    if use_layer_norm:
-      norm_layer = nn.LayerNorm
-    else:
-      norm_layer = nn.InstanceNorm2d
-    if use_tanh:
-      activation_fn = nn.Tanh(inplace=True)
-    else:
-      activation_fn = nn.LeakyReLU(negative_slope=0.2, inplace=True)
-    self.layers = nn.Sequential(
-        nn.ConvTranspose2d(
-            in_chans, out_chans, kernel_size=2, stride=2, bias=False),
-        norm_layer(out_chans),
-        activation_fn,
-    )
-
-  def forward(self, x: Tensor) -> Tensor:
-    return self.layers(x)
 
 
 class UNet(nn.Module):
@@ -83,6 +25,7 @@ class UNet(nn.Module):
 
   def __init__(self,
                in_chans: int = 1,
+               out_chans: int = 1,
                chans: int = 32,
                num_pool_layers: int = 4,
                dropout_rate: Optional[float] = 0.0,
@@ -91,6 +34,7 @@ class UNet(nn.Module):
     super().__init__()
 
     self.in_chans = in_chans
+    self.out_chans = out_chans
     self.chans = chans
     self.num_pool_layers = num_pool_layers
     if dropout_rate is None:
@@ -157,3 +101,63 @@ class UNet(nn.Module):
       output = conv(output)
 
     return output
+
+
+class ConvBlock(nn.Module):
+  # A Convolutional Block that consists of two convolution layers each
+  # followed by instance normalization, LeakyReLU activation and dropout_rate.
+
+  def __init__(self,
+               in_chans: int,
+               out_chans: int,
+               dropout_rate: float,
+               use_tanh: bool,
+               use_layer_norm: bool) -> None:
+    super().__init__()
+
+    if use_layer_norm:
+      norm_layer = nn.LayerNorm
+    else:
+      norm_layer = nn.InstanceNorm2d
+    if use_tanh:
+      activation_fn = nn.Tanh(inplace=True)
+    else:
+      activation_fn = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+    self.conv_layers = nn.Sequential(
+        nn.Conv2d(in_chans, out_chans, kernel_size=3, padding=1, bias=False),
+        norm_layer(out_chans),
+        activation_fn,
+        nn.Dropout2d(dropout_rate),
+        nn.Conv2d(out_chans, out_chans, kernel_size=3, padding=1, bias=False),
+        norm_layer(out_chans),
+        activation_fn,
+        nn.Dropout2d(dropout_rate),
+    )
+
+  def forward(self, x: Tensor) -> Tensor:
+    return self.conv_layers(x)
+
+
+class TransposeConvBlock(nn.Module):
+  # A Transpose Convolutional Block that consists of one convolution transpose
+  # layers followed by instance normalization and LeakyReLU activation.
+
+  def __init__(self, in_chans: int, out_chans: int):
+    super().__init__()
+    if use_layer_norm:
+      norm_layer = nn.LayerNorm
+    else:
+      norm_layer = nn.InstanceNorm2d
+    if use_tanh:
+      activation_fn = nn.Tanh(inplace=True)
+    else:
+      activation_fn = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+    self.layers = nn.Sequential(
+        nn.ConvTranspose2d(
+            in_chans, out_chans, kernel_size=2, stride=2, bias=False),
+        norm_layer(out_chans),
+        activation_fn,
+    )
+
+  def forward(self, x: Tensor) -> Tensor:
+    return self.layers(x)
