@@ -1,9 +1,6 @@
 """Criteo1TB DLRM workload base class."""
-<<<<<<< HEAD
 
-=======
 import abc
->>>>>>> criteo-variants
 import math
 import os
 from typing import Dict, Iterator, Optional, Tuple
@@ -29,14 +26,12 @@ class BaseCriteo1TbDlrmSmallWorkload(spec.Workload):
   embed_dim: int = 128
 
   @property
-<<<<<<< HEAD
   def target_metric_name(self) -> str:
     """The name of the target metric (useful for scoring/processing code)."""
     return 'loss'
 
   def has_reached_validation_target(self, eval_result: Dict[str,
                                                             float]) -> bool:
-=======
   def use_layer_norm(self) -> bool:
     """Whether or not to use LayerNorm in the model."""
     return False
@@ -47,7 +42,6 @@ class BaseCriteo1TbDlrmSmallWorkload(spec.Workload):
     return False
 
   def has_reached_validation_target(self, eval_result: float) -> bool:
->>>>>>> criteo-variants
     return eval_result['validation/loss'] < self.validation_target_value
 
   @property
