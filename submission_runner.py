@@ -53,6 +53,21 @@ from algorithmic_efficiency.workloads import workloads
 # disable only for deepspeech if it works fine for other workloads.
 os.environ['XLA_FLAGS'] = '--xla_gpu_enable_triton_gemm=false'
 
+# Flags to optimize JAX GPU
+os.environ["XLA_FLAGS"] = (
+  "--xla_gpu_enable_async_collectives=true"
+  " --xla_gpu_enable_latency_hiding_scheduler=true"
+  " --xla_gpu_enable_highest_priority_async_stream=true"
+  )
+
+os.environ.update({
+  "NCCL_DEBUG": "WARN",
+  "NCCL_LL128_BUFFSIZE": "-2",
+  "NCCL_LL_BUFFSIZE": "-2",
+  "NCCL_PROTO": "SIMPLE,LL,LL128",
+   })
+
+
 # TODO(znado): make a nicer registry of workloads that lookup in.
 BASE_WORKLOADS_DIR = workloads.BASE_WORKLOADS_DIR
 
