@@ -54,7 +54,7 @@ from algorithmic_efficiency.workloads import workloads
 os.environ['TF_XLA_FLAGS'] = '--xla_gpu_enable_triton_gemm=false'
 
 # Flags to optimize JAX GPU
-os.environ["XLA_FLAGS"] = (
+os.environ["TF_XLA_FLAGS"] = (
   "--xla_gpu_enable_async_collectives=true"
   " --xla_gpu_enable_latency_hiding_scheduler=true"
   " --xla_gpu_enable_highest_priority_async_stream=true"
